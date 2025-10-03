@@ -1,0 +1,61 @@
+<!-- Theme Personalization Modal -->
+<div class="modal fade" id="themePersonalizationModal" data-backdrop="static">
+  <div class="modal-dialog largeModal modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h4 class="modal-title"> <span  id="modal-name">Header</span> <small class="text-light">(Theme Personalization)</small></h4>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close" onclick="$('.modal-backdrop.show').hide();">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+
+      <form id="theme-customization-form" enctype="multipart/form-data">
+        <input type="hidden" name="sectionFlag" id="sectionFlag" value="">
+
+        <div class="modal-body">
+          <!-- Dynamic Content Injected Here -->
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-default" data-dismiss="modal" onclick="$('.modal-backdrop.show').hide();">Close</button>
+          <button type="submit" class="btn btn-primary"><i class="fas fa-save mr-1"></i> Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script src="vendor_portal/theme/themeConfig.js"></script>
+<script>
+  console.log("theme html")
+  // document.addEventListener("DOMContentLoaded", function() {
+  //   console.log("themehtml")
+    renderTriggerButtons(themeJSON);
+  // });
+
+  // Inject edit button
+  function renderTriggerButtons(themeJSON) {
+   console.log(" this is renderTriggerButtons")
+    themeJSON.themeConfig.forEach(config => {
+      const targetEl = document.querySelector(config.modal.triggerSelector);
+console.log(targetEl)
+      if (targetEl) {
+        const buttonHTML = `
+          <li class="nav-item">
+            <div class="bg-light p-1 rounded m-1 ml-2" data-toggle="tooltip" title="Edit ${config.label}">
+              <button class="btn btn-primary btn-xs actionBtn" data-config-id="${config.id}">
+                <i class="fas fa-pen"></i>
+              </button>
+            </div>
+          </li>
+        `;
+        targetEl.insertAdjacentHTML('beforeend', buttonHTML);
+
+        // Add click event listener to button
+        const addedButton = targetEl.querySelector(`[data-config-id="${config.id}"]`);
+        addedButton.addEventListener('click', () => openThemeModal(config));
+      }
+    });
+  }
+
+
+</script>
