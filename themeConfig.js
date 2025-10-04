@@ -9,7 +9,8 @@ const themeJSON = {
         "size": "largeModal",
         "triggerSelector": "#navbar .navbar-nav.ml-auto",
         "sections": [
-          { "id": "headerSection", "title": "Header", "icon": "fas fa-heading" }
+          { "id": "logoSections", "title": "Logo", "icon": "fa-image" },
+          { "id": "headerSection", "title": "Header", "icon": "fa-heading" },
         ]
       },
       "selectors": [
@@ -19,6 +20,24 @@ const themeJSON = {
             { "groupId": "colors", "include": ["background-color","color"] },
             { "groupId": "typography", "include": ["font-size"] }
           ]
+        }
+      ],
+      "logos": [
+        {
+          "title": "Main Logo",
+          "originalImageSelector": ".brand-link .brand-image",
+          "minWidth": 20,
+          "maxWidth": 500,
+          "minHeight": 20,
+          "maxHeight": 500
+        },
+        {
+          "title": "Fev Logo",
+          "originalImageSelector": ".brand-link .brand-image-fev",
+          "minWidth": 20,
+          "maxWidth": 50,
+          "minHeight": 20,
+          "maxHeight": 50
         }
       ]
     },
