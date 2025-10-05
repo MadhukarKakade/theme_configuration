@@ -16,6 +16,7 @@ const themeJSON = {
       "selectors": [
         {
           "selector": ".admin-header",
+          "sectionId": "headerSection",
           "propertyGroupRefs": [
             { "groupId": "colors", "include": ["background-color","color"] },
             { "groupId": "typography", "include": ["font-size"] }
