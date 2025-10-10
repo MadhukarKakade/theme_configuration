@@ -1,234 +1,293 @@
 /**
- * Global object to store modified CSS rules
- * Example:
- * {
- *   ".class1": { "background-color": "#000", "color": "#FFF" },
- *   ".class2": { "height": "50px" }
- * }
+ * ================================
+ * Theme Editor - Dynamic CSS Manager
+ * ================================
+ * Handles runtime theme changes, persists CSS in localStorage,
+ * and reapplies on page load. Includes color pickers (Pickr),
+ * support for !important rules, and reset/unset logic.
+ * ================================
  */
+
+/** Stores all modified styles until saved */
 let changedStyle = {};
 
+/** Tracks if any reset/unset occurred */
+let resetFlag = false;
+
 /**
- * Reset the global changedStyle object
+ * Utility: check if object is empty
  */
-function resetChangedStyle() {
-  changedStyle = {};
+function isEmptyObject(obj) {
+  return !obj || typeof obj !== "object" || Object.keys(obj).length === 0;
 }
 
 /**
- * Build the final CSS string from changedStyle
- * Merges with existing localStorage CSS and removes only unset rules
- * @param {Object} styles - changedStyle object { selector: { prop: val } }
- * @returns {string} - full updated CSS
- */
-function buildCssFromChangedStyle(styles) {
-  let savedCSS = localStorage.getItem("customCSS") || "";
-  let cssContent = savedCSS;
-
-  for (const selector in styles) {
-    if (!styles.hasOwnProperty(selector)) continue;
-    const rulesObj = styles[selector];
-    if (!rulesObj || typeof rulesObj !== "object") continue;
-
-    // Build string for rules, skipping 'unset'
-    const rules = Object.entries(rulesObj)
-      .filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== "" && v !== "unset")
-      .map(([prop, val]) => `${prop}: ${val};`)
-      .join(" ");
-
-    const regex = new RegExp(`${selector}\\s*{[^}]*}`, "g");
-
-    if (rules) {
-      // Update existing block or insert new
-      if (regex.test(cssContent)) {
-        cssContent = cssContent.replace(regex, `${selector} { ${rules} }`);
-      } else {
-        cssContent += `\n${selector} { ${rules} }`;
-      }
-    } else {
-      // Remove selector block completely if no rules remain
-      cssContent = cssContent.replace(regex, "");
-    }
-  }
-
-  return cssContent.trim();
-}
-
-/**
- * Apply CSS string as dynamic stylesheet
- * Saves to localStorage and attaches <link> in <head>
- * @param {string} cssText - Full CSS content
+ * Apply CSS text as a blob <link> in <head>
  */
 function applyCustomCSS(cssText) {
   $("#dynamic-css").remove();
   const blob = new Blob([cssText], { type: "text/css" });
   const url = URL.createObjectURL(blob);
-  $("<link>", {
+
+  const $link = $("<link>", {
     id: "dynamic-css",
     rel: "stylesheet",
-    href: url
-  }).appendTo("head");
+    href: url,
+  });
 
-  localStorage.setItem("customCSS", cssText || "");
+  $("head").append($link);
 }
 
 /**
- * Save changedStyle into localStorage and apply CSS
+ * Reset local changedStyle object
  */
-function addOrUpdateCSSRule() {
-  const cssObject = changedStyle;
-  if (!Object.keys(cssObject).length) {
+function resetChangedStyle() {
+  changedStyle = {};
+  resetFlag = false;
+}
+
+/**
+ * Add or update CSS rules into localStorage + apply them
+ * Called only on "Save/Submit"
+ */
+function addOrUpdateCSSRule(uploadedFile) {
+  if (!uploadedFile && isEmptyObject(changedStyle) && !resetFlag) {
     alert("No changes to save!");
     return;
   }
 
-  const cssContent = buildCssFromChangedStyle(cssObject);
+  let cssContent = localStorage.getItem("customCSS") || "";
+
+  for (let selector in changedStyle) {
+    if (!changedStyle.hasOwnProperty(selector)) continue;
+
+    const rulesObj = changedStyle[selector];
+    const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(`(${escapedSelector}\\s*{)([^}]*)}`, "g");
+
+    // Clean existing rules
+    cssContent = cssContent.replace(regex, "");
+
+    // Collect valid rules
+    const validRules = Object.entries(rulesObj).filter(
+      ([prop, val]) =>
+        val !== null &&
+        val !== undefined &&
+        val !== "" &&
+        !(typeof val === "object" && isEmptyObject(val))
+    );
+
+    if (validRules.length) {
+      const rulesStr = validRules
+        .map(([prop, val]) => `${prop}: ${val};`)
+        .join(" ");
+      cssContent += `\n${selector} { ${rulesStr} }`;
+    }
+  }
+
+  // Save updated CSS
+  localStorage.setItem("customCSS", cssContent);
   applyCustomCSS(cssContent);
   resetChangedStyle();
 
-  console.log("Saved CSS:", cssContent);
+  console.log("✅ Final CSS Content:\n", cssContent);
 }
 
 /**
- * Update or remove a style rule
- * @param {Object} params
- * @param {string} params.selector - DOM selector to apply CSS inline
- * @param {string} params.rule - CSS property (e.g. "background-color")
- * @param {string} params.value - CSS value or "unset" to remove
- * @param {string} [params.styleSelector] - Optional selector key for changedStyle grouping
+ * Apply a style change immediately and record it
  */
-function updateStyle({ selector, rule, value, styleSelector }) {
-  if (!selector || !rule) return;
+function updateStyle({ selector, property, value, styleSelector, important }) {
+  if (!selector || !property) return;
 
-  const isUnset = (typeof value === 'string') && value.trim().toLowerCase() === 'unset';
+  const isUnset =
+    typeof value === "string" && value.trim().toLowerCase() === "unset";
 
-  // Ensure objects exist
-  if (styleSelector) {
-    changedStyle[styleSelector] = changedStyle[styleSelector] || {};
+  // Init objects
+  if (styleSelector){
+     changedStyle[styleSelector] = changedStyle[styleSelector] || {};
   }
+  
   changedStyle[selector] = changedStyle[selector] || {};
 
   if (isUnset) {
-    // Remove inline style from DOM
-    $(selector).css(rule, '');
+    // Mark reset flag for submit
+    resetFlag = true;
 
-    // Instead of deleting, mark as "unset"
-    changedStyle[selector][rule] = 'unset';
-    if (styleSelector && styleSelector !== selector) changedStyle[styleSelector][rule] = 'unset';
+    // Remove live inline style in modal
+    suppressDynamicCssInModal(selector, property);
 
-    // Apply CSS without this property
-    applyCustomCSS(buildCssFromChangedStyle(changedStyle));
+    // Store empty object for property
+    changedStyle[selector][property] = {};
+    if (styleSelector && styleSelector !== selector) {
+      changedStyle[styleSelector][property] = {}; 
+    }
 
-    console.log('Marked rule as unset', { selector, rule, styleSelector, changedStyle });
+    console.log("🔄 Marked rule as unset", { selector, property });
     return;
   }
 
   // Normal update
-  $(selector).css(rule, value);
-  if (styleSelector) changedStyle[styleSelector][rule] = value;
-  changedStyle[selector][rule] = value;
+  applyStyle(selector, property, value, important);
+  if (styleSelector) {
+     changedStyle[styleSelector][property] = value;
+  }
+  changedStyle[selector][property] = value;
 
-  applyCustomCSS(buildCssFromChangedStyle(changedStyle));
-  console.log('Updated Styles:', changedStyle);
+  console.log("🎨 Updated Styles:", changedStyle);
 }
 
+/**
+ * Apply style to DOM immediately
+ * Handles pseudo-classes and !important rules
+ */
+function applyStyle(selector, property, value, important = false) {
+  const pseudoClasses = [
+    ":hover",
+    ":active",
+    ":focus",
+    ":visited",
+    ":link",
+    ":checked",
+    ":disabled",
+    ":enabled",
+    ":first-child",
+    ":last-child",
+    ":nth-child",
+    ":nth-of-type",
+    ":not",
+    ":before",
+    ":after",
+  ];
+
+  const hasPseudo = pseudoClasses.some((p) => selector.includes(p));
+
+  if (hasPseudo) {
+    const styleRule = `${selector} { ${property}: ${value}${
+      important ? " !important" : ""
+    }; }`;
+    let $styleTag = $("#dynamic-style-injector");
+    if ($styleTag.length === 0) {
+      $styleTag = $("<style>", { id: "dynamic-style-injector" });
+      $("head").append($styleTag);
+    }
+    $styleTag[0].sheet.insertRule(styleRule, $styleTag[0].sheet.cssRules.length);
+  } else {
+    $(selector).css(property, important ? `${value} !important` : value);
+  }
+}
 
 /**
- * Initialize multiple Pickr color pickers
- * @param {Array} configs - Array of config objects
- * Each config = { pickerSelector, inputSelector, selector, styleSelector, rule }
+ * Suppress property inside modal for unset logic
+ */
+function suppressDynamicCssInModal( selector, property,modalSelector = "#themePersonalizationModal") {
+  const dynamicLink = document.getElementById("dynamic-css");
+  if (!dynamicLink) return;
+
+  dynamicLink.disabled = true;
+
+  // Apply computed value from next-level stylesheet only to elements inside modal
+  $(modalSelector).find(selector) .each(function () {
+      const computedValue = window.getComputedStyle(this)[property];
+      // overrides dynamic-css
+      this.style[property] = computedValue;
+      console.log(`Applied next-level stylesheet value '${property}: ${computedValue}' to`, this);
+    });
+
+     // Re-enable dynamic-css
+  dynamicLink.disabled = false;
+}
+
+/**
+ * Multi Pickr initialization
  */
 function initMultiplePickrs(configs) {
-  configs.forEach(cfg => {
-    const { pickerSelector, inputSelector, selector, styleSelector, rule } = cfg;
+  configs.forEach((cfg) => {
+    const { pickerSelector, inputSelector, selector, styleSelector, property, important } = cfg;
 
-    // Get current color from DOM or fallback
-    const elementColor = colorToHex($(styleSelector).css(rule), true);
-    const defaultColor = elementColor || '#FFBF00';
+    const elementRGBAColor = colorToHex($(styleSelector).css(property), true);
+    const defaultColor = elementRGBAColor || "#FFBF00";
     const $input = $(inputSelector);
+
     $input.val(defaultColor);
 
-    // Initialize Pickr
     const pickr = Pickr.create({
       el: pickerSelector,
-      theme: 'classic',
+      theme: "classic",
       default: defaultColor,
       components: {
         preview: true,
         hue: true,
-        interaction: { hex: true, input: true, save: true }
-      }
+        interaction: {
+          hex: true,
+          input: true,
+          save: true,
+        },
+      },
     });
 
-    // Save on Pickr "save"
-    pickr.on('save', (color) => {
+    pickr.on("save", (color) => {
       const selected = color.toHEXA().toString();
       $input.val(selected);
-      updateStyle({ selector, rule, value: selected, styleSelector });
+      updateStyle({ selector, property, value: selected, styleSelector, important });
       pickr.hide();
     });
 
-    // Update dynamically when typing in input
-    $input.on('input', function () {
+    $input.on("input", function () {
       const val = $(this).val().trim();
       if (isValidHexInput(val)) {
-        const hex = '#' + val.replace(/^#/, '').toUpperCase();
+        const hex = "#" + val.replace(/^#/, "").toUpperCase();
         pickr.setColor(hex);
-        updateStyle({ selector, rule, value: hex, styleSelector });
-      } else if (val.toLowerCase() === 'unset') {
-        updateStyle({ selector, rule, value: 'unset', styleSelector });
+        updateStyle({ selector, property, value: hex, styleSelector, important });
+      }
+      if (val.toLowerCase() === "unset" || val.toLowerCase() === "remove") {
+        updateStyle({ selector, property, value: "unset", styleSelector, important });
       }
     });
   });
 }
 
 /**
- * Convert any valid CSS color → HEX
- * Supports rgb(), rgba(), #RRGGBB, #RRGGBBAA
- * @param {string} color - Input color string
- * @param {boolean} [allowAlpha=false] - Include alpha if rgba present
- * @returns {string} - HEX color (#RRGGBB or #RRGGBBAA) or fallback "#FFBF00"
+ * Color utils
  */
 function colorToHex(color, allowAlpha = false) {
-  if (!color) return '#FFBF00';
+  if (!color) return "#FFBF00";
   color = color.trim();
+
   if (/^#?([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(color)) {
-    return '#' + color.replace(/^#/, '').toUpperCase();
+    return "#" + color.replace(/^#/, "").toUpperCase();
   }
-  const rgbMatch = /^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)$/i.exec(color);
+
+  const rgbMatch = /^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)$/i.exec(
+    color
+  );
   if (rgbMatch) {
     const r = parseInt(rgbMatch[1]);
     const g = parseInt(rgbMatch[2]);
     const b = parseInt(rgbMatch[3]);
-    let hex = ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
+    let hex =
+      ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
     if (allowAlpha && rgbMatch[4] !== undefined) {
       let a = Math.round(parseFloat(rgbMatch[4]) * 255);
-      hex += ('0' + a.toString(16)).slice(-2).toUpperCase();
+      hex += ("0" + a.toString(16)).slice(-2).toUpperCase();
     }
-    return '#' + hex;
+    return "#" + hex;
   }
-  return '#FFBF00';
+
+  return "#FFBF00";
 }
 
-/**
- * Validate HEX input (6 or 8 digit, with optional #)
- * @param {string} input - User input
- * @returns {boolean} - True if valid
- */
 function isValidHexInput(input) {
   return /^#?[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/.test(input.trim());
 }
 
-// Load saved CSS on page ready
-const savedCSS = localStorage.getItem("customCSS") || "";
-if (savedCSS) applyCustomCSS(savedCSS);
-
-// Expose globally
+/**
+ * Expose globally
+ */
 window.ThemeEditor = {
   applyCustomCSS,
   addOrUpdateCSSRule,
   updateStyle,
-  initMultiplePickrs
+  initMultiplePickrs,
 };
 
-console.log("Theme editor initialized");
+console.log("✅ theme.js imported");
