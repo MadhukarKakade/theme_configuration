@@ -8,6 +8,7 @@ const themeJSON = {
         "title": "Configure Header",
         "size": "largeModal",
         "triggerSelector": "#navbar .navbar-nav.ml-auto",
+        "buttonName": "list",
         "sections": [
           { "id": "logoSections", "title": "Logo", "icon": "fa-image" },
           { "id": "headerSection", "title": "Header", "icon": "fa-heading" },
@@ -81,3 +82,9 @@ const themeJSON = {
     }
   }
 };
+
+window.themeConfig = window.themeConfig || (typeof window.themeJSON !== 'undefined' ? window.themeJSON : window.themeConfig);
+window.propertyGroups = window.propertyGroups || (typeof window.themePropertyGroups !== 'undefined' ? window.themePropertyGroups : window.propertyGroups);
+// Expose config and groups to the page (and keep backward-compat) 
+window.themeJSON = window.themeJSON || themeJSON; window.themeConfig = window.themeConfig || themeJSON.themeConfig; // Array of modules: header, footer, ... 
+window.propertyGroups = window.propertyGroups || themeJSON.propertyGroups; // Groups catalog
