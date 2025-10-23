@@ -1,0 +1,592 @@
+<!-- ================= Theme Personalization Modal ================= -->
+<style>
+/* .form-control-file {
+  padding: 5px;
+  border: 1px dashed #6c63ff;
+  background: #f9f9ff;
+  cursor: pointer;
+  height: calc(2.25rem + 2px);
+}
+.form-control-file::file-selector-button {
+  margin-right: 10px;
+  border: none;
+  background: #6c63ff;
+  color: #fff;
+  cursor: pointer;
+  height: 30px;
+}
+.form-control-file::file-selector-button:hover {
+  background: #5348d3;
+}
+.upload-img-box {
+  width: 100%;
+  min-height: 150px;
+  border: 2px dashed #6c63ff;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 12px;
+}
+#theme-header-container .brand-link {
+    position: absolute;
+    left: 0;
+}
+#theme-header-container  .brand-link { background-color: #7326D9;} */
+/* div.modal-body { max-height: calc(100vh - 190px); overflow: auto;}
+.pickr .pcr-button { width: 5em;} */
+/* Upload Input Styles */
+
+</style>
+
+<div class="modal fade" id="themePersonalizationModal" data-backdrop="static">
+  <div class="modal-dialog largeModal modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h4 class="modal-title">Header <small class="text-light">(Theme Personalization)</small></h4>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close" onclick="$('.modal-backdrop.show').hide();">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+
+      <form id="theme-customization-form" enctype="multipart/form-data">
+        <div class="modal-body">
+
+          <!-- ================= Logo Section ================= -->
+          <div class="card card-outline card-secondary card-lapine-blue card-lapine">
+            <div class="card-header"><h3 class="card-title"><i class="fas fa-image mr-2"></i>Logo</h3></div>
+            <div class="card-body">
+              <div class="row" id="logo-sections"></div>
+            </div>
+          </div>
+
+          <!-- ================= Header Section ================= -->
+          <div class="card card-outline card-secondary card-lapine-blue card-lapine">
+            <div class="card-header"><h3 class="card-title"><i class="fas fa-heading mr-2"></i>Header</h3></div>
+            <div class="card-body">
+              <div class="row" id="header-color-options"></div>
+              <div id="theme-header-container" class="position-relative"></div>
+            </div>
+          </div>
+
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-default" data-dismiss="modal" onclick="$('.modal-backdrop.show').hide();">Close</button>
+          <button type="submit" class="btn btn-primary" id="headerFormSubmitBtn"><i class="fas fa-save mr-1"></i> Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+/** ================= Logo Config (same as before) ================= */
+const logoConfig = [
+  {
+    type: 'main',
+    title: 'Main Logo',
+    previewId: 'sidebar-main-logo',
+    inputName: 'long_logo',
+    widthInputId: 'long-logo-width',
+    heightInputId: 'long-logo-height',
+    defaultWidth: 220,
+    defaultHeight: 50,
+    minWidth:20,
+    maxWidth:500,
+    minHeight:20,
+    maxHeight:500,
+    originalImageSelector : ".brand-link .brand-image"
+  },
+  {
+    type: 'small',
+    title: 'Fev Logo',
+    previewId: 'sidebar-fev-logo',
+    inputName: 'small_logo',
+    widthInputId: 'small-logo-width',
+    heightInputId: 'small-logo-height',
+    defaultWidth: 50,
+    defaultHeight: 50,
+    minWidth:20,
+    maxWidth:50,
+    minHeight:20,
+    maxHeight:50,
+    originalImageSelector:".brand-link .brand-image-fev"
+  }
+];
+
+/** ================= Header Config (new structure) ================= */
+const headerConfig = [
+  {
+    label: 'Header',
+    baseKey: 'header-bg',
+    styleSelectors: [
+      { selector: ".admin-header" },
+      { selector: ".layout-navbar-fixed .wrapper .sidebar-dark-primary .brand-link:not([class*='navbar'])", important: true }
+    ],
+    property: 'background-color',
+    pseudoClasses: ['', ':hover', ':active'],
+    textColor: false,
+    textPseudoClasses: ['', ':hover'],
+    borderColor: true,
+    borderPseudoClasses: ['', ':focus']
+  },
+  {
+    label: 'Header',
+    baseKey: 'header-clr',
+    styleSelectors: [
+      { selector: ".brand-link .brand-text" },
+      { selector: ".navbar-light .navbar-nav .nav-link" },
+      { selector: ".navbar-light .navbar-nav .nav-link .bg-light.rounded", important: true }
+    ],
+    property: 'color',
+    pseudoClasses: ['', ':hover', ':active']
+  }
+];
+
+/** ================= Helpers ================= */
+function getLabel(baseLabel, property) {
+  if (property === 'background-color') return baseLabel + ' Background Color';
+  if (property === 'color') return baseLabel + ' Text Color';
+  if (property === 'border-color') return baseLabel + ' Border Color';
+  return baseLabel + ' ' + property;
+}
+
+function buildPickerSelector(baseKey, keySuffix) {
+  return `#${baseKey}${keySuffix}-picker`;
+}
+
+function buildInputSelector(baseKey, keySuffix) {
+  return `#${baseKey}${keySuffix}-color`;
+}
+
+/** ================= Expand Configs ================= */
+const expandedConfigs = [];
+
+function generateConfigs(cfg, property, pseudoClasses) {
+  pseudoClasses.forEach(pseudo => {
+    const keySuffix = pseudo ? '-' + pseudo.replace(':','') : '';
+
+    expandedConfigs.push({
+      label: getLabel(cfg.label, property) + (pseudo ? ` (${pseudo.replace(':','')})` : ''),
+      pickerSelector: buildPickerSelector(cfg.label, property),
+      inputSelector: buildInputSelector(cfg.label, property),
+      selectors: cfg.styleSelectors.map(selObj => ({
+        selector: selObj.selector + pseudo,
+        important: !!selObj.important
+      })),
+      property
+    });
+  });
+}
+
+
+// Expand base config
+headerConfig.forEach(cfg => {
+  generateConfigs(cfg, cfg.property, cfg.pseudoClasses);
+
+  if (cfg.textColor) {
+    generateConfigs(cfg, 'color', cfg.textPseudoClasses);
+  }
+  if (cfg.borderColor) {
+    generateConfigs(cfg, 'border-color', cfg.borderPseudoClasses);
+  }
+});
+
+/** ================= Render Inputs ================= */
+$(function() {
+  const $container = $("#header-color-options");
+  expandedConfigs.forEach(cfg => {
+    $container.append(`
+      <div class="col-md-3">
+        <div class="form-group required">
+          <label for="${cfg.inputSelector.replace('#','')}">${cfg.label}</label>
+          <div class="input-group">
+            <div class="input-group-prepend border p-1 mr-4">
+              <div id="${cfg.pickerSelector.replace('#','')}"></div>
+            </div>
+            <input type="text" id="${cfg.inputSelector.replace('#','')}" 
+                   class="form-control mr-md-5" 
+                   value="">
+          </div>
+        </div>
+      </div>
+    `);
+  });
+
+  // Init pickers for all expanded configs
+  if (typeof ThemeEditor !== 'undefined' && ThemeEditor.initMultiplePickrs) {
+    ThemeEditor.initMultiplePickrs(expandedConfigs);
+  }
+});
+</script>
+
+
+<script>
+/** ================= Dynamic Logo & Header ================= */
+$(function() {
+//  const logoConfig = [
+//   {
+//     type: 'main',
+//     title: 'Main Logo',
+//     previewId: 'sidebar-main-logo',
+//     inputName: 'long_logo',
+//     widthInputId: 'long-logo-width',
+//     heightInputId: 'long-logo-height',
+//     defaultWidth: 220,
+//     defaultHeight: 50,
+//     minWidth:20,
+//     maxWidth:500,
+//     minHeight:20,
+//     maxHeight:500,
+//     originalImageSelector : ".brand-link .brand-image"
+//   },
+//   {
+//     type: 'small',
+//     title: 'Fev Logo',
+//     previewId: 'sidebar-fev-logo',
+//     inputName: 'small_logo',
+//     widthInputId: 'small-logo-width',
+//     heightInputId: 'small-logo-height',
+//     defaultWidth: 50,
+//     defaultHeight: 50,
+//     minWidth:20,
+//     maxWidth:50,
+//     minHeight:20,
+//     maxHeight:50,
+//     originalImageSelector:".brand-link .brand-image-fev"
+//   }
+// ];
+
+
+  logoConfig.forEach(cfg => {
+    const colClass = cfg.type === 'main' ? 'pr-md-5' : 'pl-md-5';
+    $('#logo-sections').append(`
+      <div class="col-md-6 ${colClass}">
+        <div class="row">
+          <div class="col-md-6">
+            <div class="form-group required">
+              <label>${cfg.title}</label>
+              <input type="file" class="form-control-file" name="${cfg.inputName}" accept="image/*" onchange="previewLogo(this,'${cfg.previewId}','${cfg.type}-logo')">
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="form-group required">
+              <label>Width</label>
+              <div class="input-group">
+                <input type="number" class="form-control" id="${cfg.widthInputId}" min="${cfg.minWidth}" max="${cfg.maxWidth}" oninput="ThemeEditor.updateStyle({selector:'#${cfg.previewId}', property:'width', value:this.value+'px'})">
+                <div class="input-group-append"><span class="input-group-text">px</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="form-group required">
+              <label>Height</label>
+              <div class="input-group">
+                <input type="number" class="form-control" id="${cfg.heightInputId}" min="${cfg.minHeight}" max="${cfg.maxHeight}" oninput="ThemeEditor.updateStyle({selector:'#${cfg.previewId}', property:'height', value:this.value+'px'})">
+                <div class="input-group-append"><span class="input-group-text">px</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <h5 class="mb-3">${cfg.title} Preview</h5>
+        <div class="upload-img-box">
+          <img id="${cfg.previewId}" class="brand-image" src="#" alt="${cfg.title} Preview">
+        </div>
+      </div>
+    `);
+
+    // Restore logos from storage
+    const storedLogo = localStorage.getItem(cfg.type+'-logo');
+    if(storedLogo) {
+      $(cfg.originalImageSelector).attr('src', storedLogo);
+    }
+    // Set src first
+$('#' + cfg.previewId).attr('src', $(cfg.originalImageSelector).attr('src'))
+  .on('load', function() {  // wait until image is loaded
+      const imgW = parseInt($(cfg.originalImageSelector).width()) || 0;
+      const imgH = parseInt($(cfg.originalImageSelector).height()) || 0;
+
+      // apply dimensions to preview image
+      $(this).attr('width', imgW).attr('height', imgH);
+
+      // also update input fields
+      $('#' + cfg.widthInputId).val(imgW);
+      $('#' + cfg.heightInputId).val(imgH);
+
+      console.log("→ Preview updated:", cfg.previewId, imgW + "x" + imgH);
+  });
+
+
+// });
+
+  // });
+  // });
+});
+const getCssDimension = ($el, prop) => parseInt($el.css(prop)) || 0;
+
+  // Header clone for live preview
+  $("#theme-header-container").append($("aside.main-sidebar .brand-link").clone());
+  $("#theme-header-container").append($("#navbar .main-header").clone());
+
+  // Inject edit button
+  $('#navbar .navbar-nav.ml-auto').append(`
+    <li class="nav-item">
+      <div class="bg-light p-1 rounded m-1 ml-2" data-toggle="tooltip" title="Edit Header">
+        <button id="headerContent" class="btn btn-primary btn-xs actionBtn" data-toggle="modal" data-target="#themePersonalizationModal">
+          <i class="fas fa-pen"></i>
+        </button>
+      </div>
+    </li>
+  `);
+  $('[data-toggle="tooltip"]').tooltip();
+
+  // Header color config
+//   const headerConfig = [
+//   {
+//     label: 'Background Color',
+//     picker: 'header-bg-picker',
+//     input: 'header-bg-color',
+//     selector: '#theme-header-container .admin-header, #theme-header-container .brand-link',
+//     styleSelector: '.admin-header, .brand-link',
+//     property: 'background-color',
+    
+//     // default: '#0d6efd'
+//   },
+//   {
+//     label: 'Hover Background',
+//     picker: 'header-hover-bg-picker',
+//     input: 'header-hover-bg-color',
+//     selector: '#theme-header-container .admin-header:hover, #theme-header-container .brand-link:hover',
+//     styleSelector:  '.admin-header:hover, .brand-link:hover',
+//     property: 'background-color',
+//     // default: '#5348d3'
+//   },
+//   // {
+//   //   label: 'Text Color',
+//   //   picker: 'header-text-color-picker',
+//   //   input: 'header-text-color',
+//   //   selector: '#theme-header-container .admin-header, #theme-header-container .brand-link',
+//   //   styleSelector: '.admin-header, .brand-link',
+//   //   property: 'color',
+//   //   default: '#ffffff'
+//   // }
+// ];
+
+
+  // const $container = $("#header-color-options");
+  // headerConfig.forEach(cfg => {
+  //   $container.append(`
+  //     <div class="col-md-3">
+  //       <div class="form-group required">
+  //         <label for="${cfg.input}">${cfg.label}</label>
+  //         <div class="input-group">
+  //           <div class="input-group-prepend border p-1 mr-4">
+  //             <div id="${cfg.picker}"></div>
+  //           </div>
+  //           <input type="text" id="${cfg.input}" class="form-control mr-md-5" value="${cfg.default}">
+  //         </div>
+  //       </div>
+  //     </div>
+  //   `);
+  // });
+  // Header color config
+
+
+
+
+
+  // ================= Config =================
+  // const headerConfig = [
+  //   {
+  //     label: 'Header',   // Just "Header"
+  //     baseKey: 'header-bg',
+  //     selector: '#theme-header-container .admin-header, #theme-header-container .brand-link',
+  //     styleSelector: ".admin-header, .layout-navbar-fixed .wrapper .sidebar-dark-primary .brand-link:not([class*='navbar']",
+  //     property: 'background-color',
+  //     // default: '#0d6efd',
+  //     pseudoClasses: ['', ':hover', ':active'],
+
+  //     // extras
+  //     textColor: false,
+  //     textPseudoClasses: ['', ':hover'],
+  //     borderColor: true,
+  //     borderPseudoClasses: ['', ':focus']
+  //   },
+  //   {
+  //     label: 'Header',   // Just "Header"
+  //     baseKey: 'header-clr',
+  //     selector: '#theme-header-container .admin-header, #theme-header-container .brand-link',
+  //     styleSelector: ".navbar-light .navbar-nav .nav-link,.navbar-light .navbar-nav .nav-link .bg-light.rounded",
+  //     property: 'color',
+  //     // default: '#0d6efd',
+  //     pseudoClasses: ['', ':hover', ':active'],
+
+  //     // extras
+  //     // textColor: true,
+  //     // textPseudoClasses: ['', ':hover'],
+  //     // borderColor: true,
+  //     // borderPseudoClasses: ['', ':focus']
+  //   }
+  // ];
+
+  // ================= Label Resolver =================
+  // function getLabel(baseLabel, property) {
+  //   let suffix = '';
+  //   if (property === 'background-color') suffix = 'Background Color';
+  //   else if (property === 'color') suffix = 'Text Color';
+  //   else if (property === 'border-color') suffix = 'Border Color';
+
+  //   if (baseLabel) return baseLabel + ' ' + suffix;
+  //   return suffix;
+  // }
+
+  // ================= Expand Config =================
+  // const expandedConfigs = [];
+
+  // const generateConfigs = (cfg, variant) => {
+  //   variant.pseudoClasses.forEach(pseudo => {
+  //     const keySuffix = pseudo ? '-' + pseudo.replace(':','') : '';
+
+  //     expandedConfigs.push({
+  //       label: getLabel(variant.label, variant.property) + (pseudo ? ' (' + pseudo.replace(':','') + ')' : ''),
+  //       pickerSelector: `#${variant.baseKey}${keySuffix}-picker`,
+  //       inputSelector: `#${variant.baseKey}${keySuffix}-color`,
+  //       selector: cfg.selector.split(',').map(sel => sel.trim() + pseudo).join(', '),
+  //       styleSelector: cfg.styleSelector.split(',').map(sel => sel.trim() + pseudo).join(', '),
+  //       property: variant.property,
+  //       default: cfg.default
+  //     });
+  //   });
+  // };
+
+  // // Expand variants for each config
+  // headerConfig.forEach(cfg => {
+  //   // background
+  //   generateConfigs(cfg, {
+  //     label: cfg.label,
+  //     baseKey: cfg.baseKey,
+  //     property: cfg.property,
+  //     pseudoClasses: cfg.pseudoClasses
+  //   });
+
+  //   // text
+  //   if (cfg.textColor) {
+  //     generateConfigs(cfg, {
+  //       label: cfg.label,
+  //       baseKey: cfg.baseKey.replace('-bg', '-text-clr'),
+  //       property: 'color',
+  //       pseudoClasses: cfg.textPseudoClasses
+  //     });
+  //   }
+
+  //   // border
+  //   if (cfg.borderColor) {
+  //     generateConfigs(cfg, {
+  //       label: cfg.label,
+  //       baseKey: cfg.baseKey.replace('-bg', '-border-clr'),
+  //       property: 'border-color',
+  //       pseudoClasses: cfg.borderPseudoClasses
+  //     });
+  //   }
+  // });
+
+  // ================= Render Inputs =================
+  // const $container = $("#header-color-options");
+  // expandedConfigs.forEach(cfg => {
+  //   $container.append(`
+  //     <div class="col-md-3">
+  //       <div class="form-group required">
+  //         <label for="${cfg.inputSelector.replace('#','')}">${cfg.label}</label>
+  //         <div class="input-group">
+  //           <div class="input-group-prepend border p-1 mr-4">
+  //             <div id="${cfg.pickerSelector.replace('#','')}"></div>
+  //           </div>
+  //           <input type="text" id="${cfg.inputSelector.replace('#','')}" 
+  //                  class="form-control mr-md-5" 
+  //                  value="${cfg.default || ''}">
+  //         </div>
+  //       </div>
+  //     </div>
+  //   `);
+  // });
+
+  // // ================= Init Pickrs =================
+  // if (typeof ThemeEditor !== 'undefined' && ThemeEditor.initMultiplePickrs) {
+  //   ThemeEditor.initMultiplePickrs(expandedConfigs);
+  // }
+});
+
+
+
+// headerConfig.forEach(cfg => {
+//   // background color input
+//   $container.append(`
+//     <div class="col-md-3">
+//       <div class="form-group required">
+//         <label for="${cfg.baseKey}-color">${cfg.label}</label>
+//         <div class="input-group">
+//           <div class="input-group-prepend border p-1 mr-4">
+//             <div id="${cfg.baseKey}-picker"></div>
+//           </div>
+//           <input type="text" id="${cfg.baseKey}-color" class="form-control mr-md-5" value="${cfg.default}">
+//         </div>
+//       </div>
+//     </div>
+//   `);
+
+//   // text color input (if enabled)
+//   if (cfg.textColor) {
+//     $container.append(`
+//       <div class="col-md-3">
+//         <div class="form-group required">
+//           <label for="${cfg.baseKey}-text-color">${cfg.label} Text</label>
+//           <div class="input-group">
+//             <div class="input-group-prepend border p-1 mr-4">
+//               <div id="${cfg.baseKey}-text-picker"></div>
+//             </div>
+//             <input type="text" id="${cfg.baseKey}-text-color" class="form-control mr-md-5" value="#ffffff">
+//           </div>
+//         </div>
+//       </div>
+//     `);
+//   }
+// });
+
+
+
+//   // Initialize pickers safely
+//   if(typeof ThemeEditor !== 'undefined' && ThemeEditor.initMultiplePickrs) {
+//     ThemeEditor.initMultiplePickrs(headerConfig.map(cfg=>({
+//       pickerSelector:'#'+cfg.picker,
+//       inputSelector:'#'+cfg.input,
+//       selector: cfg.selector,
+//       styleSelector: cfg.styleSelector,
+//       property: cfg.property
+//     })));
+//   }
+//  });
+
+function previewLogo(input, previewId, key) {
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const base64 = e.target.result;
+    localStorage.setItem(key, base64); //set image
+    $('#'+previewId).attr('src', base64).css('display', 'block');
+    // $('.brand-link .'+(key==='main-logo'?'brand-image':'brand-image-fev')).attr('src', base64);
+  };
+  reader.readAsDataURL(file);
+  uploadedFile = true
+}
+
+let uploadedFile = false
+/** ================= Save custom styles ================= */
+$(function() {
+  $("#headerFormSubmitBtn").on("click", function(e){
+    e.preventDefault();
+    if(typeof ThemeEditor !== 'undefined' && ThemeEditor.addOrUpdateCSSRule ) {
+      ThemeEditor.addOrUpdateCSSRule(uploadedFile);
+    }
+  });
+});
+</script> 
